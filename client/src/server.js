@@ -47,10 +47,13 @@ function sendEncryptRequest(){
 }
 
 socket.on('availableNodesForEncrypt',(msg)=>{
-    msg=JSON.parse(msg)
+    nodes=JSON.parse(msg)
     //now need some kind of UI to choose which nodes you want to share the secret with. (so will need names in the db and init msg also)
     //for now i will assume it is all of them.
-    socket.emit('nodesIWantEncryptWith',JSON.stringify(msg))
+    //need a UI for choosing name of file to be encrypted also.
+    //  for now i will call it helloworldfile
+    myname='helloworldfile' //+add some unique ID here such that no 2 file names are ever the same. V IMP
+    socket.emit('nodesIWantEncryptWith',JSON.stringify({name:myname, nodes:nodes}))
 })
 
 

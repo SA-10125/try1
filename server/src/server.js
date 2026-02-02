@@ -5,6 +5,7 @@ const {runShatterlockEncrypt,readShatterlockDecrypt}=require('./shatterhandle.js
 
 const connectDB=require("./config/db.js");
 const ConnectedNode=require("./models/connectedNodes.js")
+const NodeAndName=require("./models/nodesAndNames.js")
 
 //create a http server
 const http=require('http') //builtin library in node
@@ -45,14 +46,23 @@ io.on('connection',async (socket)=>{
 
     socket.on('encryptRequest',async (msg)=>{
         const nodes=await ConnectedNode.find({alive:true}).sort({createdAt:-1})
-        socket.emit('availableNodesForEncrypt',JSON.stringify(notes))
+        socket.emit('availableNodesForEncrypt',JSON.stringify(nodes))
     })
 
-    socket.on('nodesIWantEncryptWith',(msg)=>{
+    socket.on('nodesIWantEncryptWith',async (msg)=>{
         msg=JSON.parse(msg);
-        //msg contains all nodes that are to be sharing the secret.
-        //TODO: might be outdated tho, get all them again from the db
-        
+        nodes=msg.nodes
+        confirmedNodes=[]
+        myname=msg.myname
+        //nodes contains all nodes that are to be sharing the secret.
+        //might be outdated tho, get all them again from the db
+        for(let i in nodes){const node=await ConnectedNode.find({id:i.id}); if (node.alive){confirmedNodes.push(node)};}
+        //myname contains name of 'paragrapgh' to be distributed and encrypted.
+        //now i will save the {myname:nodes} in the db so that i can refer to it throughout my encryption and decryption processes.
+        //TODO: think if this compromises security.
+        const nodeNname=new NodeAndName({name:myname,nodes:confirmedNodes})
+        await nodeNname.save()
+        //I WAS HERE (i guess now we send a response saying acknowledged and stored, all nodes you requested are available or not then the client sends the sentences)
     })
 
     socket.on('disconnect',async ()=>{
