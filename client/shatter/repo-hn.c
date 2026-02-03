@@ -372,30 +372,29 @@ void removejunkfromstream(char *ciphertext_in, char *ciphertext_out){  //TODO: I
  * Note: Uses L*U construction (lower-triangular * upper-triangular) to
  *       guarantee invertibility modulo 26 on first attempt
  */
-void makehillkey(int seed, int hillkey_out[26][26]) { //github copilot made this. pls forgive.
-    srand(seed); // Seed the random number generator
-    
-    // This function generates a 26x26 invertible matrix modulo 26 using the L*U construction method.
-    // The matrix is always invertible mod 26, and the process is deterministic for a given seed.
-    // L: lower-triangular with 1s on the diagonal (invertible mod 26)
-    // U: upper-triangular with random nonzero diagonal (invertible mod 26)
-    int L[26][26] = {0};
-    int U[26][26] = {0};
-    // Fill L (lower-triangular, 1s on diagonal)
-    for (int i = 0; i < 26; i++) {
+void makehillkey(int seed, int hillkey_out[25][25]) { //github copilot made this. pls forgive.
+    srand(seed);
+
+    // Generate a 25x25 invertible matrix mod 26 using LU construction
+
+    int L[25][25] = {0};
+    int U[25][25] = {0};
+
+    // Fill L (lower-triangular with 1s on diagonal)
+    for (int i = 0; i < 25; i++) {
         for (int j = 0; j <= i; j++) {
             if (i == j) {
-                L[i][j] = 1; // 1s on diagonal
+                L[i][j] = 1;
             } else {
-                L[i][j] = rand() % 26; // random element in Z26
+                L[i][j] = rand() % 26;
             }
         }
     }
-    // Fill U (upper-triangular, random nonzero diagonal)
-    for (int i = 0; i < 26; i++) {
-        for (int j = i; j < 26; j++) {
+
+    // Fill U (upper-triangular with invertible diagonal)
+    for (int i = 0; i < 25; i++) {
+        for (int j = i; j < 25; j++) {
             if (i == j) {
-                // Diagonal must be coprime to 26 (i.e., odd and not divisible by 13)
                 int val = (rand() % 25) + 1; // 1..25
                 while (val % 2 == 0 || val % 13 == 0) {
                     val = (rand() % 25) + 1;
@@ -406,17 +405,153 @@ void makehillkey(int seed, int hillkey_out[26][26]) { //github copilot made this
             }
         }
     }
-    // Multiply L and U to get the final key matrix (mod 26)
-    for (int i = 0; i < 26; i++) {
-        for (int j = 0; j < 26; j++) {
+
+    // Multiply L and U to get key matrix (mod 26)
+    for (int i = 0; i < 25; i++) {
+        for (int j = 0; j < 25; j++) {
             int sum = 0;
-            for (int k = 0; k < 26; k++) {
+            for (int k = 0; k < 25; k++) {
                 sum = (sum + L[i][k] * U[k][j]) % 26;
             }
             hillkey_out[i][j] = sum;
         }
     }
+
+    // hillkey_out is guaranteed invertible mod 26
+
     // Now hillkey_out is a random invertible matrix mod 26, reproducible from the seed.
+}
+
+//from here not made by me, for matrix manipulations.
+
+// Function to compute (a mod m)
+int mod(int a, int m) {
+    int result = a % m;
+    if (result < 0) result += m;
+    return result;
+}
+
+// Function to find modular multiplicative inverse of a under modulo m
+// using Extended Euclidean Algorithm
+int modInverse(int a, int m) {
+    a = mod(a, m);
+    for (int x = 1; x < m; x++) {
+        if (mod(a * x, m) == 1)
+            return x;
+    }
+    return -1; // No modular inverse exists
+}
+
+void PrintMatrix(int** ar, int n, int m)
+{
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < m; j++) {
+            printf("%d  ", ar[i][j]);
+        }
+        printf("\n");
+    }
+    return;
+}
+
+// Function to perform the inverse operation on the matrix modulo 26.
+void InverseOfMatrix(int matrix_in[25][25], int order, int inverted_out[25][25])
+{   
+    int matrix[25][50];
+    for(int i=0;i<25;i++){for(int j=0;j<25;j++){matrix[i][j]=matrix_in[i][j];}for(int j=25;j<50;j++){matrix[i][j]=0;}}
+    int temp;
+    int modVal = 26;
+
+    // Create the augmented matrix
+    // Add the identity matrix of order at the end of original matrix.
+    for (int i = 0; i < order; i++) {
+        for (int j = 0; j < 2 * order; j++) {
+            // Add '1' at the diagonal places to create identity matrix
+            if (j == (i + order))
+                matrix[i][j] = 1;
+            else if (j >= order)
+                matrix[i][j] = 0;
+        }
+    }
+
+    // Gauss-Jordan elimination with modular arithmetic
+    for (int i = 0; i < order; i++) {
+        // Find pivot element's modular inverse
+        int pivot = mod(matrix[i][i], modVal);
+        int pivotInv = modInverse(pivot, modVal);
+        
+        if (pivotInv == -1) {
+            printf("\nERROR: Matrix is not invertible mod 26!\n");
+            return;
+        }
+
+        // Multiply the current row by pivot inverse (mod 26)
+        for (int j = 0; j < 2 * order; j++) {
+            matrix[i][j] = mod(matrix[i][j] * pivotInv, modVal);
+        }
+
+        // Eliminate all other rows
+        for (int k = 0; k < order; k++) {
+            if (k != i) {
+                int factor = mod(matrix[k][i], modVal);
+                for (int j = 0; j < 2 * order; j++) {
+                    matrix[k][j] = mod(matrix[k][j] - factor * matrix[i][j], modVal);
+                }
+            }
+        }
+    }
+
+    //matrix now contains [I|inverse(A)]
+    // Extract just the inverse part (right half) into the original matrix positions
+    for (int i = 0; i < order; i++) {
+        for (int j = 0; j < order; j++) {
+            inverted_out[i][j] = matrix[i][j + order];
+        }
+    }
+
+    return;
+}
+
+void mulMat(int numpacks,int m1[numpacks][25], int key[25][25], int rslt[numpacks][25]) { 
+    for (int i = 0; i < numpacks; i++) {
+        for (int j = 0; j < 25; j++) {
+            rslt[i][j] = 0;
+
+            for (int k = 0; k < 25; k++) { 
+                rslt[i][j] = mod(rslt[i][j] + m1[i][k] * key[k][j], 26);
+            }
+        }
+    }
+}
+
+//till here not made by me
+
+void hill(int numpacks,char packets[numpacks][26],int hillkey[25][25],char packets_out[numpacks][26]){ //same function for encryption and decryption. 
+    //same function for encryption and decryption. 
+    //when hillkey entered with unencrypted packets, it encrypts. when inversehillkey entered with encrypted packets, it decrypts.
+    if(numpacks>25){printf("ERROR: numpacks more than 25 pls write code to handle that also.");}
+    //E=KA
+    //A=inv(K)E
+
+    int intpacks[numpacks][25];
+    //turn the packets into 25 long arrays of numbers from 0 to 25 and that into a 2d matrix of max rows=25
+    for(int i=0;i<numpacks;i++){
+        for(int j=0;j<25;j++){
+            if((int)packets[i][j]<97 || (int)packets[i][j]>122){
+                printf("ERROR: chars outta range in hill");
+            }
+        intpacks[i][j]=((int)packets[i][j]-97);
+        }
+    } 
+    int resultpacks[numpacks][25];
+    mulMat(numpacks,intpacks,hillkey,resultpacks); //multiply the matrices formed by the hillkey modulo 26
+    //take the multiplied matrix and turn the 2d array into many 1d arrays of 25 chars each and /0 at the end.
+    for(int i=0;i<numpacks;i++){
+        for(int j=0;j<25;j++){
+            packets_out[i][j]=(char)(resultpacks[i][j]+97);
+        }
+        packets_out[i][25]='\0';
+    }
+    return;
 }
 
 int makefirstanswerkey(int *keystream, int len_of_keystream, char *first_answer, int *keystream_out, int seed){
@@ -493,7 +628,7 @@ void makepackets(char *ciphertext, char packets_out[][26]){ //only works for les
     }
 }
 
-int makejunk(char packets_out[][26], int hillkey[][26]){ 
+int makejunk(char packets_out[][26], int hillkey[25][25]){ 
     char randtext[]="philosophyofeducationisalabelappliedtothestudyofthepurposeprocessnatureandidealsofeducationitcanbeconsideredabranchofbothphilosophyandeducationeducationcanbedefinedastheteachingandlearningofspecificskillsandtheimpartingofknowledgejudgmentandwisdomandissomethingbroaderthanthesocietalinstitutionofeducationweoftenspeakofmanyeducationalistsconsideritaweakandwoollyfieldtoofarremovedfromthepracticalapplicationsoftherealworldtobeusefulbutphilosophersdatingbacktoplatoandtheancientgreekshavegiventheareamuchthoughtandemphasisandthereislittledoubtthattheirworkhashelpedshapethepracticeofeducationoverthemillenniaplatoistheearliestimportanteducationalthinkerandeducationisanessentialelementintherepublichismostimportantworkonphilosophyandpoliticaltheorywrittenaroundbcinitheadvocatessomeratherextrememethodsremovingchildrenfromtheirmotherscareandraisingthemaswardsofthestateanddifferentiatingchildrensuitabletothevariouscastesthehighestreceivingthemosteducationsothattheycouldactasguardiansofthecityandcareforthelessablehebelievedthateducationshouldbeholisticincludingfactsskillsphysicaldisciplinemusicandartplatobelievedthattalentandintelligenceisnotdistributedgeneticallyandthusisbefoundinchildrenborntoallclassesalthoughhisproposedsystemofselectivepubliceducationforaneducatedminorityofthepopulationdoesnotreallyfollowademocraticmodelaristotleconsideredhumannaturehabitandreasontobeequallyimportantforcestobecultivatedineducationtheultimateaimofwhichshouldbetoproducegoodandvirtuouscitizensheproposedthatteachersleadtheirstudentssystematicallyandthatrepetitionbeusedasakeytooltodevelopgoodhabitsunlikesocratesemphasisonquestioninghislistenerstobringouttheirownideasheemphasizedthebalancingofthetheoreticalandpracticalaspectsofsubjectstaughtamongwhichheexplicitlymentionsreadingwritingmathematicsmusicphysicaleducationliteraturehistoryandawiderangeofsciencesaswellasplaywhichhealsoconsideredimportantduringthemedievalperiodtheideaofperennialismwasfirstformulatedbystthomasaquinashisinworkdemagistroperennialismholdsthatoneshouldteachthosethingsdeemedtobeofeverlastingimportancetoallpeopleeverywherenamelyprinciplesandreasoningnotjustfactswhichareapttochangeovertimeandthatoneshouldteachfirstaboutpeoplenotmachinesortechniquesitwasoriginallyreligiousinnatureanditwasonlymuchlaterthatatheoryofsecularperennialismdevelopedduringtherenaissancethefrenchskepticmicheldemontaignewasoneofthefirsttocriticallylookateducationunusuallyforhistimemontaignewaswillingtoquestiontheconventionalwisdomoftheperiodcallingintoquestionthewholeedificeoftheeducationalsystemandtheimplicitassumptionthatuniversityeducatedphilosopherswerenecessarilywiserthanuneducatedfarmworkersforexample";
     //were going with this rand text instead of just taking random characters one at a time so that people cant detect junk usinc Index of Coincidence.
     //this is still easily breakable.
@@ -515,8 +650,8 @@ int makejunk(char packets_out[][26], int hillkey[][26]){
 
     int num=(int)ceil(strlen(cipherrandtext)/18.0);
     char packets[num][26];
-    makepackets(cipherrandtext,packets_out); //TODO: change to packets when hill is done.
-    //hill_encrypt(num,packets,hillkey,packets_out); //TODO: yet to test
+    makepackets(cipherrandtext,packets); 
+    hill(num,packets,hillkey,packets_out); //TODO: yet to test
 
     return(num);
 
@@ -708,6 +843,17 @@ void write_metadata_packet(int numpacks, int *key_given, int len_of_key_given, i
         temp[k]=onlyletters[rand()%26];
     }
     temp[25]='\0';
+
+    //there are some packets that contain characters outside a-z which will be a problem for hill cipher
+    //so for now, im just going to replace all of those with q
+    for(int i=0;i<25;i++){
+        if (97>temp[i] || temp[i]>122){
+            if(temp[i]!='\0'){
+                temp[i]='q';
+            }
+        }
+    }
+
     writetofile(packetpath,temp); //writing
 }
 
@@ -781,9 +927,9 @@ void handle_encryption_tasks(char *plaintext, int *key_given, int len_of_key_giv
 
     char newpackets[numpacks][26];
 
-    int hillkey[26][26];
-    //makehillkey(seed_passed,hillkey);
-    //hill_encrypt(numpacks,packets,hillkey,newpackets); //TODO: yet to test
+    int hillkey[25][25];
+    makehillkey(seed_passed,hillkey);
+    hill(numpacks,packets,hillkey,newpackets); //TODO: yet to test
     //now newpackets have the final encrypted packets (even metadata is encrypted.)
 
     int numjunk=makejunk(junk,hillkey);
@@ -794,8 +940,8 @@ void handle_encryption_tasks(char *plaintext, int *key_given, int len_of_key_giv
     namejunk(junkpaths,numjunk,junkkeystream,junkkeylen); //doenst need to be reproducible, but shouldnt overwrite actual packets.
 
     getpaths(packetpaths,packetnames,numpacks,seed_passed);
-
-    writepacketsintofiles(packetpaths,numpacks,packets,junkpaths,numjunk,junk,key_given,len_of_key_given);
+    
+    writepacketsintofiles(packetpaths,numpacks,newpackets,junkpaths,numjunk,junk,key_given,len_of_key_given);
 
     printf("Encrypted and Saved.",seed_passed);
 }
@@ -916,11 +1062,13 @@ void getfullplaintext(int *keystream, int len_of_key, int seed, char *plaintext_
     getpackets(numpackets,packetpaths,encrypted_packets); 
 
     char packets[numpackets][26];
-    int hillkey[26][26];
-    //makehillkey(seed,hillkey);
-    //hill_decrypt(numpackets,encrypted_packets,hillkey,packets);
+    int hillkey[25][25];
+    makehillkey(seed,hillkey);
+    int inversehillkey[25][25];
+    InverseOfMatrix(hillkey,25,inversehillkey);
+    hill(numpackets,encrypted_packets,inversehillkey,packets);
 
-    openpackets(cipherjunktext,encrypted_packets,numpackets); //TODO: change this when you implement hill.
+    openpackets(cipherjunktext,packets,numpackets); //TODO: change this when you implement hill.
     char ciphertext[200]; 
     removejunkfromstream(cipherjunktext,ciphertext);
     vigenerre_decrypt(ciphertext, plaintext, keystream, len_of_key);
