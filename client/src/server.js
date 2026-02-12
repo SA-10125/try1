@@ -56,4 +56,23 @@ socket.on('availableNodesForEncrypt',(msg)=>{
     socket.emit('nodesIWantEncryptWith',JSON.stringify({name:myname, nodes:nodes}))
 })
 
+socket.on('ackavailability',(msg)=>{
+    msg=JSON.parse(msg);
+    console.log(msg.msg);
+    if(msg.confirmedNodes.length==msg.asked.length){ //TODO: look into, might not be right
+        //all nodes we want are online, lets send the messages to the server which will distribute among nodes with bounces as needed.
+        contents='helloworldhowareyouimgoodbroisallanyonesays'
+        //add junk ig, just demo of message sharing for now.
+        //going with the most basic cipher i can think of for demo purposes
+        let encryptedContents="";
+        for(let i=0;i<contents.length;i++){encryptedContents+=String(contents.charCodeAt(i)+3)}
+        //format of msg: |ED|To|OG|Name|From|Contents|
+        socket.emit('message',JSON.stringify({"ED":"E","To":"server","Name":'helloworldfile',"From":socket.id,"Contents":encryptedContents}))
+    }
+})
+
+socket.on('message',(msg)=>{
+    
+})
+
 

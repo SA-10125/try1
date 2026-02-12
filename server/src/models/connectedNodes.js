@@ -13,9 +13,6 @@ const connectedNodesSchema = new mongoose.Schema({
     },
     alive:{
         type:Boolean,
-    },
-    socket:{
-        type: mongoose.Schema.Types.Mixed //this means anything goes
     }
 },{timestamps:true} //this is the second object timestamps. by default, mongodb will give you createdAt and updatedAt fields.
 )
