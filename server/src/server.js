@@ -73,6 +73,7 @@ io.on('connection',async (socket)=>{
 
     socket.on('message',async (msg)=>{
         msg=JSON.parse(msg);
+        console.log("got a message")
         const nodeNname = await NodeAndName.findOne({"name":msg.Name});
         if (!nodeNname || !nodeNname.nodes || nodeNname.nodes.length === 0) {
             console.log('No nodes found for name: ' + msg.Name);
@@ -83,11 +84,27 @@ io.on('connection',async (socket)=>{
         //add junk ig, just demo of message sharing for now.
         //going with the most basic cipher i can think of for demo purposes
         let encryptedContents="";
-        for(let i=0;i<contents.length;i++){encryptedContents+=String(contents.charCodeAt(i)+3)} //for testing purposes, this is our encryption algorigthm.
+        for(let i=0;i<contents.length;i++){encryptedContents+=String.fromCharCode(contents.charCodeAt(i)+3)} //for testing purposes, this is our encryption algorigthm.
         //format of msg: |ED|To|OG|Name|From|Contents|
         const randomclient = await ConnectedNode.findOne({id:randomclientid});
         if(randomclient && randomclient.alive){ //send to that one client via io.to(socketid)
             io.to(randomclient.id).emit('message',JSON.stringify({"ED":"E","To":randomclient.id,"OG":msg.OG,"Name":msg.Name,"From":"server","Contents":encryptedContents}))
+            console.log("sending a message")
+        }
+    })
+
+    socket.on('msgrecievedack',(msg)=>{
+        msg=JSON.parse(msg);
+        console.log(`a ${msg.Name} recieved by ${msg.From}`);
+    })
+
+    socket.on('msgsavedack',async (msg)=>{
+        msg=JSON.parse(msg);
+        console.log(`a ${msg.Name} saved by ${msg.From}`);
+        const todelete= await NodeAndName.findOne({"name":msg.Name});
+        if(todelete){
+            const deleted= await NodeAndName.findByIdAndDelete(todelete._id);
+            if(!deleted){console.log("Error deleting")}
         }
     })
 
