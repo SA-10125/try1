@@ -68,7 +68,6 @@ io.on('connection',async (socket)=>{
         //TODO: think if this compromises security.
         const nodeNname=new NodeAndName({name:myname,nodes:confirmedNodes})
         await nodeNname.save()
-        //I WAS HERE (i guess now we send a response saying acknowledged and stored, all nodes you requested are available or not then the client sends the sentences)
         socket.emit('ackavailability',JSON.stringify({"msg":`${confirmedNodes.length} out of ${nodes.length} available`,"confirmedNodes":confirmedNodes,"asked":nodes,"nodeNname":nodeNname}));
     })
 
@@ -84,11 +83,11 @@ io.on('connection',async (socket)=>{
         //add junk ig, just demo of message sharing for now.
         //going with the most basic cipher i can think of for demo purposes
         let encryptedContents="";
-        for(let i=0;i<contents.length;i++){encryptedContents+=String(contents.charCodeAt(i)+3)}
+        for(let i=0;i<contents.length;i++){encryptedContents+=String(contents.charCodeAt(i)+3)} //for testing purposes, this is our encryption algorigthm.
         //format of msg: |ED|To|OG|Name|From|Contents|
         const randomclient = await ConnectedNode.findOne({id:randomclientid});
         if(randomclient && randomclient.alive){ //send to that one client via io.to(socketid)
-            io.to(randomclient.id).emit('message',JSON.stringify({"ED":"E","To":randomclient.id,"Name":msg.Name,"From":"server","Contents":encryptedContents}))
+            io.to(randomclient.id).emit('message',JSON.stringify({"ED":"E","To":randomclient.id,"OG":msg.OG,"Name":msg.Name,"From":"server","Contents":encryptedContents}))
         }
     })
 
