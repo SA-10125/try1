@@ -79,17 +79,34 @@ io.on('connection',async (socket)=>{
             console.log('No nodes found for name: ' + msg.Name);
             return;
         }
-        const randomclientid = nodeNname.nodes[Math.floor(Math.random() * nodeNname.nodes.length)];
-        contents=JSON.stringify({"from":msg.From,"contents":msg.Contents})
-        //add junk ig, just demo of message sharing for now.
-        //going with the most basic cipher i can think of for demo purposes
-        let encryptedContents="";
-        for(let i=0;i<contents.length;i++){encryptedContents+=String.fromCharCode(contents.charCodeAt(i)+3)} //for testing purposes, this is our encryption algorigthm.
-        //format of msg: |ED|To|OG|Name|From|Contents|
-        const randomclient = await ConnectedNode.findOne({id:randomclientid});
-        if(randomclient && randomclient.alive){ //send to that one client via io.to(socketid)
-            io.to(randomclient.id).emit('message',JSON.stringify({"ED":"E","To":randomclient.id,"OG":msg.OG,"Name":msg.Name,"From":"server","Contents":encryptedContents}))
-            console.log("sending a message")
+        if(msg.ED=="E"){
+            const randomclientid = nodeNname.nodes[Math.floor(Math.random() * nodeNname.nodes.length)];
+            contents=JSON.stringify({"from":msg.From,"contents":msg.Contents})
+            //add junk ig, just demo of message sharing for now.
+            //going with the most basic cipher i can think of for demo purposes
+            let encryptedContents="";
+            for(let i=0;i<contents.length;i++){encryptedContents+=String.fromCharCode(contents.charCodeAt(i)+parseInt(process.env.MYADD))} //for testing purposes, this is our encryption algorigthm.
+            //format of msg: |ED|To|OG|Name|From|Contents|
+            const randomclient = await ConnectedNode.findOne({id:randomclientid});
+            if(randomclient && randomclient.alive){ //send to that one client via io.to(socketid)
+                io.to(randomclient.id).emit('message',JSON.stringify({"ED":"E","To":randomclient.id,"OG":msg.OG,"Name":msg.Name,"From":"server","Contents":encryptedContents}))
+                console.log("sending a message")
+            }
+        }
+        else if(msg.ED=="D"){
+            //decrypt one layer, understand who its from and send it to that client.
+            //here contents is going to be an encryptedcontents containing from and contents
+            //if to==server:
+            let decryptedcontents="";
+            for(let i=0;i<msg.Contents.length;i++){decryptedcontents+=String.fromCharCode(msg.contents.charCodeAt(i)-parseInt(process.env.MYADD))} //for testing purposes, this is our decryption algorigthm.
+            sendto=JSON.parse(decryptedcontents).from
+            contents=JSON.parse(decryptedcontents).contents
+            socketsendto= await ConnectedNode.findOne({id:sendto})
+            const nodeNnameCheck = await NodeAndName.findOne({"name":msg.Name})
+            if(socketsendto && socketsendto.alive && nodeNnameCheck.nodes.includes(sendto)){
+                io.to(sendto).emit('message',JSON.stringify({"ED":"D","To":sendto,"OG":msg.OG,"Name":msg.Name,"From":"server","Contents":contents}))
+                console.log("sending a mesage")
+            }
         }
     })
 

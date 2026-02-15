@@ -8,6 +8,7 @@ const path = require('path'); //might not need this after switching to shatterlo
 const fs=require('fs'); //might not need this after switching to shatterlock
 
 const express = require("express");
+const { json } = require("stream/consumers");
 const app=express();
 
 //middleware (to allow for post data to be passed via request.body)
@@ -84,7 +85,8 @@ socket.on('ackavailability',(msg)=>{
         //add junk ig, just demo of message sharing for now.
         //going with the most basic cipher i can think of for demo purposes
         let encryptedContents="";
-        for(let i=0;i<global.Gcontents.length;i++){encryptedContents+=String.fromCharCode(global.Gcontents.charCodeAt(i)+parseInt(process.env.MYLOCALADD))} //local first encrypt
+        let mycontents=JSON.stringify({"Contents":global.Gcontents.charCodeAt})
+        for(let i=0;i<global.Gcontents.length;i++){encryptedContents+=String.fromCharCode(mycontents(i)+parseInt(process.env.MYLOCALADD))} //local first encrypt
         //format of msg: |ED|To|OG|Name|From|Contents|
         global.Gcontents=null; //cleanup for safety purpose
         console.log('[CLIENT] Sending message with Name:'+global.Gname);
@@ -120,7 +122,6 @@ function save(msg,socket){
 
 function bounce(msg,socket){ //just gonna bounce the msg back to server after encrypting from my end with my key (later).
     //theoretically, we do need to confirm again saying are the nodes i want available? (for now imma assume they are)
-    msg=JSON.parse(msg)
     socket.emit('msgrecievedack', JSON.stringify({"ED":"E","To":"server","OG":msg.OG,"Name":msg.Name,"From":socket.id}))
     let contents=JSON.stringify({"from":msg.From,"contents":msg.Contents})
     //add junk ig, just demo of message sharing for now.
@@ -134,19 +135,48 @@ function bounce(msg,socket){ //just gonna bounce the msg back to server after en
 
 function keep(msg,socket){
     //im going to make this one save it to shatterlock soon but for now im just gonna save it in a .txt for proof of concept.
-    msg=JSON.parse(msg)
     socket.emit('msgrecievedack', JSON.stringify({"ED":"E","To":"server","OG":msg.OG,"Name":msg.Name,"From":socket.id}))
     const saved=save(msg,socket)
 }
 
 socket.on('message',(msg)=>{
-    //decide on a chance wether to save it or bounce it again to the server based on chance (and maybe a minimum quota).
-    //if we save it, need to emit a savedack and recievedack
-    //else need to emit a recievedack (maybe even a bouncedack?)
-    const choices=[true,false,false,false] //weighted array (for now) (true=keep, false=bounce)
-    const shouldKeep=choices[Math.floor(Math.random()*choices.length)]
-    console.log('[CLIENT] Decision:', shouldKeep ? 'KEEP' : 'BOUNCE');
-    if(shouldKeep){keep(msg,socket)}
-    else{bounce(msg,socket)}
+    msg=JSON.parse(msg)
+    if(msg.ED=="E"){
+        //decide on a chance wether to save it or bounce it again to the server based on chance (and maybe a minimum quota).
+        //if we save it, need to emit a savedack and recievedack
+        //else need to emit a recievedack (maybe even a bouncedack?)
+        const choices=[true,false,false,false] //weighted array (for now) (true=keep, false=bounce)
+        const shouldKeep=choices[Math.floor(Math.random()*choices.length)]
+        console.log('[CLIENT] Decision:', shouldKeep ? 'KEEP' : 'BOUNCE');
+        if(shouldKeep){keep(msg,socket)}
+        else{bounce(msg,socket)}
+    }
+    else if(msg.ED=="D"){
+        //decrypt one layer and see who its from and send to server with to=the client.
+        //here contents is going to be an encryptedcontents containing from and contents
+        try{
+            let decryptedcontents="";
+            for(let i=0;i<msg.Contents.length;i++){decryptedcontents+=String.fromCharCode(msg.contents.charCodeAt(i)-parseInt(process.env.MYADD))} //for testing purposes, this is our decryption algorigthm.
+            sendto=JSON.parse(decryptedcontents).from
+            contents=JSON.parse(decryptedcontents).contents
+            socket.emit('message',JSON.stringify({"ED":"D","To":"server","OG":msg.OG,"Name":msg.Name,"From":"server","Contents":contents}))
+        }
+        catch(error){ //
+            if(error.name=="SyntaxError" && msg.OG==socket.id){ //likely meaning the JSON couldnt be parsed meaning ours might be the last layer of local encryption
+                let decryptedcontents="";
+                for(let i=0;i<msg.Contents.length;i++){decryptedcontents+=String.fromCharCode(msg.Contents.charCodeAt(i)-parseInt(process.env.MYLOCALADD))} //local first encrypt
+                contents=JSON.parse(decryptedcontents).Contents
+                console.log(contents);
+            }
+        }
+    }
 })
 
+//now need to impliment a get api call where we return the decrypted contents.
+//now in that, we need another socket event where we send a msg to server saying pls decrypt this msg
+//now server sends a message to all nodes in the nodeAndName with that name saying ok guys start sending your msgs with this name.
+//those should start sending the msgs and send an ack once all the msgs of that name in thier local storage has been sent out
+//these will start msgs going out in ED=D sense. and keep going and get decrypted and eventually reach the source fully decrypted
+//then somehow we will have to send back the reply to the get request with that fully decrypted contents
+//now one way im thinking to do this is to to have the get api function keep a global variable in poll 
+// and once the fully decrypted contents is gotten, it can update that variable and then the get api function realises it and sends the reply.
