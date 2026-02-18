@@ -98,12 +98,12 @@ io.on('connection',async (socket)=>{
             //here contents is going to be an encryptedcontents containing from and contents
             //if to==server:
             let decryptedcontents="";
-            for(let i=0;i<msg.Contents.length;i++){decryptedcontents+=String.fromCharCode(msg.contents.charCodeAt(i)-parseInt(process.env.MYADD))} //for testing purposes, this is our decryption algorigthm.
-            sendto=JSON.parse(decryptedcontents).from
-            contents=JSON.parse(decryptedcontents).contents
-            socketsendto= await ConnectedNode.findOne({id:sendto})
+            for(let i=0;i<msg.Contents.length;i++){decryptedcontents+=String.fromCharCode(msg.Contents.charCodeAt(i)-parseInt(process.env.MYADD))} //for testing purposes, this is our decryption algorigthm.
+            const sendto=JSON.parse(decryptedcontents).from
+            const contents=JSON.parse(decryptedcontents).contents
+            const socketsendto= await ConnectedNode.findOne({id:sendto})
             const nodeNnameCheck = await NodeAndName.findOne({"name":msg.Name})
-            if(socketsendto && socketsendto.alive && nodeNnameCheck.nodes.includes(sendto)){
+            if(socketsendto && socketsendto.alive && nodeNnameCheck && nodeNnameCheck.nodes.includes(sendto)){
                 io.to(sendto).emit('message',JSON.stringify({"ED":"D","To":sendto,"OG":msg.OG,"Name":msg.Name,"From":"server","Contents":contents}))
                 console.log("sending a mesage")
             }
@@ -118,11 +118,23 @@ io.on('connection',async (socket)=>{
     socket.on('msgsavedack',async (msg)=>{
         msg=JSON.parse(msg);
         console.log(`a ${msg.Name} saved by ${msg.From}`);
-        const todelete= await NodeAndName.findOne({"name":msg.Name});
-        if(todelete){
-            const deleted= await NodeAndName.findByIdAndDelete(todelete._id);
-            if(!deleted){console.log("Error deleting")}
-        }
+        //We need to maintain this NodeNname until the message has been decrypted and is fully done and dusted, hence will comment out these lines.
+        // const todelete= await NodeAndName.findOne({"name":msg.Name});
+        // if(todelete){
+        //     const deleted= await NodeAndName.findByIdAndDelete(todelete._id);
+        //     if(!deleted){console.log("Error deleting")}
+        // }
+    })
+
+    socket.on('sendallof',async (msg)=>{
+        msg=JSON.parse(msg)
+        console.log("sendallof request recieved"+msg)
+        io.emit("allsend",JSON.stringify({"name":msg.Name}))
+        //TODO: fix this cause if we are going with io.emit, theres no need to not delete NodeNname after encryption
+        // nodeNname= await NodeAndName.findOne({"name":msg.Name})
+        // for (const node of nodeNname.nodes){
+        //     io.to(node).emit('allsend',JSON.stringify({"name":msg.Name}))
+        // }
     })
 
     socket.on('disconnect',async ()=>{
@@ -145,3 +157,4 @@ connectDB().then(()=>{
 //every once in a while, poll all active nodes to see if theyre still alive and update the db accordingly.
 //for non alive nodes, change alive status to false and remove that from nodesNnames
 //we also need a shutdown function for the server where it can clear the databases and then switch off.
+//once all packets of that name have been saved, it should be relayed to the og sender and in the NodeNname for that name also.
