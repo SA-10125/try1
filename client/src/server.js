@@ -163,20 +163,27 @@ socket.on('message',(msg)=>{
         try{
             let decryptedcontents="";
             for(let i=0;i<msg.Contents.length;i++){decryptedcontents+=String.fromCharCode(msg.Contents.charCodeAt(i)-parseInt(process.env.MYADD))} //for testing purposes, this is our decryption algorigthm.
-            const whoami=JSON.parse(decryptedcontents).whoami
+            const parsedData=JSON.parse(decryptedcontents);
+            const whoami=parsedData.whoami
             console.log(whoami); //for debugging
-            const contents=JSON.parse(decryptedcontents).contents
+            const contents=parsedData.contents
             socket.emit('message',JSON.stringify({"ED":"D","To":"server","OG":msg.OG,"Name":msg.Name,"From":socket.id,"Contents":contents}))
         }
         catch(error){ //
             if(error.name=="SyntaxError" && msg.OG==socket.id){ //likely meaning the JSON couldnt be parsed meaning ours might be the last layer of local encryption
-                let decryptedcontents="";
-                for(let i=0;i<msg.Contents.length;i++){decryptedcontents+=String.fromCharCode(msg.Contents.charCodeAt(i)-parseInt(process.env.MYLOCALADD))} //local first encrypt
-                const contents=JSON.parse(decryptedcontents).Contents
-                console.log(contents);
-                // TODO: Need to implement way to send this back to the GET API request
+                try{
+                    let decryptedcontents="";
+                    for(let i=0;i<msg.Contents.length;i++){decryptedcontents+=String.fromCharCode(msg.Contents.charCodeAt(i)-parseInt(process.env.MYLOCALADD))} //local first encrypt
+                    const contents=JSON.parse(decryptedcontents).Contents
+                    console.log(contents);
+                    // TODO: Need to implement way to send this back to the GET API request
+                }
+                catch(innerError){
+                    console.log('[CLIENT] Decryption failed with both keys:', innerError.message);
+                    console.log('[CLIENT] Decrypted data was:', decryptedcontents);
+                }
             }
-            else{console.log(error)}
+            else{console.log('[CLIENT] Error during decryption:', error)}
         }
     }
 })
